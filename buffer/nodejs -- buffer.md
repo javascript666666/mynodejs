@@ -1,6 +1,6 @@
-﻿# nodejs -- buffer
+﻿# nodejs -- Buffer
 
-标签（空格分隔）： node
+标签（空格分隔）： Node
 
 ---
 
@@ -12,7 +12,7 @@
 
 Buffer对象是一个典型的JavaScript与C++的结合模块，它性能相关的部分由C++来实现，非性能相关的部分由JavaScript来实现。
 
-> JS引擎本身是没有操作文件和数据权限的，但是Node可以直接运行在服务端，也就是说如果实现了与C++底层的对接，就可以去间接的去操作系统文件和数据了。在Node中，通过process对象提供的binging方法既可以完成对象。从源码也可以看出，关于Buffer.js的第一句代码：
+> JS引擎本身是没有操作文件和数据权限的，但是Node可以直接运行在服务端，也就是说如果实现了与C++底层的对接，就可以去间接的去操作系统文件和数据了。在Node中，通过process对象提供的binging方法就可以完成JS与C++的对接。从源码也可以看出，关于Buffer.js的第一句代码：
 
 ```
 const binding = process.binding('buffer');
@@ -20,7 +20,7 @@ const binding = process.binding('buffer');
 // 在Node中不仅仅是Buffer对象，还有fs等对象都是这样实现和C++对接的。
 ```
 
-Buffer对象有些类似js中的数组，但是它的元素是16进制的两位数，即为0到255的数值(8位无符号整形Uint8Array)，并且可以通过length属性访问其长度。
+Buffer对象有点类似js中的数组，但是它的元素是16进制的两位数，即为0到255的数值(8位无符号整形Uint8Array)，并且可以通过length属性访问其长度。
 
 > * 值得注意的是，当给buffer元素指定一个小于0或者大于255或者是小数的时候会有一些特别的地方：
     * 如果元素赋值小于0，那么该值逐次加上256，直到得到一个0到255的整数。
@@ -58,7 +58,7 @@ Node中Buffer对象的内存分配不是在V8的堆内存中，而是Node在C++�
 
 ### 关于我是怎么知道上面这些的？
 
-可以看几段关键的Buffer.js源码，其实无论使用哪个初始化Buffer对象的API最终都会走进这几个函数：
+可以看几段关键的Buffer.js源码，其实无论使用哪个方法初始化Buffer对象最终都会走进这几个函数：
 
 ```
 Buffer.poolSize = 8 * 1024;  // 设定8k池
@@ -85,7 +85,7 @@ function createUnsafeBuffer(size) {
   return new FastBuffer(createUnsafeArrayBuffer(size));
 }
 
-// 调用JS原声提供的 ArrayBuffer 构造接口
+// 调用 ArrayBuffer 构造接口
 function createUnsafeArrayBuffer(size) {
   zeroFill[0] = 0;
   try {
@@ -123,6 +123,9 @@ function allocate(size) {
   }
 }
 ```
+
+> 可以看出如果走的是createUnsafeBuffer()则不会经过8k池，若走 allocate() 函数，当传入的数据大小小于 Buffer.poolSize 有符号右移 1 位后的结果（相当于将该值除以 2 再向下取整，为 4 KB），才会使用到 8KB 池（若当前池剩余空间不足，则创建一个新的slab单元，并将allocPool指向新池）。
+
 
 关于更多API源码可以参阅 [Buffer.js][1]
 
@@ -295,7 +298,7 @@ function fromObject(obj) {
 
 ### Class Method: Buffer.from(arrayBuffer[, byteOffset[, length]])
 
-> 接收一个ES2015的arrayBuffer实例并且初始化，二者会共享内存。
+> 接收一个arrayBuffer实例并且初始化，二者会共享内存。
 
 * arrayBuffer: ArrayBuffer或者TypedArray的实例
 * byteOffset: 接收一个整数，默认值0，用来指定从哪里开始复制arrayBuffer的数据。
@@ -367,6 +370,8 @@ console.log(buf1.toString());
 console.log(buf2.toString());
 ```
 
+源码同上。
+
 ### Class Method: Buffer.from(string[, encoding])
 
 > 接收一个字符串作为参数，转换为buffer对象.
@@ -424,14 +429,536 @@ function fromString(string, encoding) {
 
 ---
 
+## Buffer 的属性
+
+Class Property: Buffer.poolSize: 缓冲区大小，默认8k。
+Class Property: buffer.kMaxLength: 缓冲区最大值，32位系统为~1GB，64位系统为~2GB。
+
+> 可以使用 buf.length 查看Buffer对象的字节长度，这里需要注意的是字符长度不同于字节长度，比如一个中文代表一个字符长度，但是在utf8编码格式下有3个字节长度。
+
+```
+const buf1 = Buffer.from('爱');
+console.log(buf1.length);  // 3
+console.log(buf1); // <Buffer e7 88 b1>
+```
+
+---
+
 ## Buffer 的常用方法
 
 Buffer对象提供了一些常用的工具方法，下面对一些常用的API进行记录和总结，方便日后查用。（基于7.x文档）
 
 ### buf.toString([encoding[, start[, end]]])
 
+> 将Buffer对象转为字符串
+
+* encoding: 指定要转换为字符串的编码格式，默认为utf8。
+* start: 指定Buffer起始位置，包括起始位置。
+* end: 指定Buffer的结束位置，不包括结束位置。
+
+```
+const buf1 = Buffer.allocUnsafe(26);
+
+for (let i = 0 ; i < 26 ; i++) {
+  // 97 is the decimal ASCII value for 'a'
+  buf1[i] = i + 97;
+}
+
+// Prints: abcdefghijklmnopqrstuvwxyz
+console.log(buf1.toString('ascii'));
+
+// Prints: abcde
+console.log(buf1.toString('ascii', 0, 5));
 
 
+const buf2 = Buffer.from('tést');
+
+// Prints: 74c3a97374
+console.log(buf2.toString('hex'));
+
+// Prints: té
+console.log(buf2.toString('utf8', 0, 3));
+
+// Prints: té
+console.log(buf2.toString(undefined, 0, 3));
+```
+
+### Class Method: Buffer.byteLength(string[, encoding])
+
+>  获取字符串的实际的字节长度
+
+* string: 要获取的字符串
+* encoding: 可选，以指定的编码格式，默认utf8
+
+```
+const str = '把妹儿';
+let len = Buffer.byteLength(str);
+console.log(`${str} 的长度是${str.length},字节长度是${len}`);
+
+// 把妹儿 的长度是3,字节长度是9
+```
+
+### Class Method: Buffer.compare(buf1, buf2)
+
+> 比较当前缓冲区和另一个缓冲区的大小，相等返回0，小于返回-1，大于返回1。
+
+```
+const buf1 = Buffer.from('1234');
+const buf2 = Buffer.from('0123');
+const arr = [buf1, buf2];
+
+// Prints: [ <Buffer 30 31 32 33>, <Buffer 31 32 33 34> ]
+// (This result is equal to: [buf2, buf1])
+console.log(arr.sort(Buffer.compare));
+```
+
+```
+let buf1 = Buffer.from('abc');
+let buf2 = Buffer.from('abcb');
+
+let result = Buffer.compare(buf1, buf2);
+
+console.log(result);  // -1
+```
+
+### Class Method: Buffer.concat(list[, totalLength])
+
+> 将多个buffer合并在一起，并返回一个新的buffer实例，参数totalLength为指定的buffers的长度总和，如果不提供该值，函数内部会循环去获取每一个buffer的长度，然后进行拼接，因此为了速度，最好指定一个总长度。
+
+```
+const buf1 = Buffer.alloc(10);
+const buf2 = Buffer.alloc(14);
+const buf3 = Buffer.alloc(18);
+const totalLength = buf1.length + buf2.length + buf3.length;
+
+// Prints: 42
+console.log(totalLength);
+
+const bufA = Buffer.concat([buf1, buf2, buf3], totalLength);
+
+// Prints: <Buffer 00 00 00 00 ...>
+console.log(bufA);
+
+// Prints: 42
+console.log(bufA.length);
+```
+
+### Class Method: Buffer.isBuffer(obj)
+
+> 判断一个对象是否为Buffer对象，是返回true，非返回false。
+
+### Class Method: Buffer.isEncoding(encoding)
+
+> 判断是否为可用的编码格式，如果可用返回true，否则返回false。
+
+```
+let orIf = Buffer.isEncoding('utf-16le');
+console.log(orIf); // true
+```
+
+```
+// 源码
+Buffer.isEncoding = function(encoding) {
+  switch ((encoding + '').toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+    case 'raw':
+      return true;
+    default:
+      return false;
+  }
+};
+```
+### buffer.transcode(source, fromEnc, toEnc)
+
+> 此方法不属于全局方法，使用之前需要 require('buffer')，用于将指定的Buffer对象从一种编码格式转换为另外一种。暂时没发现有什么用...，当指定的编码无法转换的时候会使用 ? 代替。
+
+```
+const buffer = require('buffer');
+
+const newBuf = buffer.transcode(Buffer.from('€'), 'utf8', 'ascii');
+console.log(newBuf.toString('ascii'));
+// Prints: '?'
+```
+
+### buf[index]
+
+> 通过下标获取或者设置Buffer对象对应的单个字节。
+
+```
+const str = 'Node.js';
+const buf = Buffer.allocUnsafe(str.length);
+
+for (let i = 0; i < str.length ; i++) {
+  buf[i] = str.charCodeAt(i);
+}
+
+// Prints: Node.js
+console.log(buf.toString('ascii'));
+```
+
+### buf.compare(target[, targetStart[, targetEnd[, sourceStart[, sourceEnd]]]])
+
+> 与Buffer.compare()功能一样，但是可以指定目标和源目标的起始和结束位置。
+
+- target: 要比较的Buffer对象。
+- targetStart: buf的起始位置，默认值为0。
+- targetEnd: buf的结束位置，当targetStart为undefined的时候，不包括结束位置，默认值为buf.length。
+- sourceStart: 源Buffer对象的起始位置，当targetStart为undefined的时候，默认值为0。
+- sourceEnd: 源Buffer对象的结束位置，不包括结束位置，当targetStart为undefined的时候，默认值为source.length。
+
+> * 如果target与source相等，那么返回0。
+> * 如果target比较source在前面，那么返回1。
+> * 如果target比较source在后面，那么返回-1。
+
+```
+const buf1 = Buffer.from('ABC');
+const buf2 = Buffer.from('BCD');
+const buf3 = Buffer.from('ABCD');
+
+// Prints: 0
+console.log(buf1.compare(buf1));
+
+// Prints: -1
+console.log(buf1.compare(buf2));
+
+// Prints: -1
+console.log(buf1.compare(buf3));
+
+// Prints: 1
+console.log(buf2.compare(buf1));
+
+// Prints: 1
+console.log(buf2.compare(buf3));
+
+// Prints: [ <Buffer 41 42 43>, <Buffer 41 42 43 44>, <Buffer 42 43 44> ]
+// (This result is equal to: [buf1, buf3, buf2])
+console.log([buf1, buf2, buf3].sort(Buffer.compare));
+```
+### buf.copy(target[, targetStart[, sourceStart[, sourceEnd]]])
+
+> 将buf的数据拷贝到target上面，是将数据进行复制，所以是两个不同的内存空间。
+
+* target: 被粘贴的目标Buffer对象。
+* targetStart: 被粘贴目标的起始位置。
+* sourceStart: 源Buffer对象的起始位置。
+* sourceEnd: 源Buffer对象的结束位置，不包括结束位。
+
+```
+const buf1 = Buffer.allocUnsafe(26);
+const buf2 = Buffer.allocUnsafe(26).fill('!');
+
+for (let i = 0 ; i < 26 ; i++) {
+  // 97 is the decimal ASCII value for 'a'
+  buf1[i] = i + 97;
+}
+
+buf1.copy(buf2, 8, 16, 20);
+
+// Prints: !!!!!!!!qrst!!!!!!!!!!!!!
+console.log(buf2.toString('ascii', 0, 25));
+```
+
+测方法还可以从将自己的数据复制给自己：
+
+```
+const buf = Buffer.allocUnsafe(26);
+
+for (let i = 0 ; i < 26 ; i++) {
+  // 97 is the decimal ASCII value for 'a'
+  buf[i] = i + 97;
+}
+
+buf.copy(buf, 0, 4, 10);
+
+// Prints: efghijghijklmnopqrstuvwxyz
+console.log(buf.toString());
+```
+
+### buf.entries()
+
+> 对当前Buffer对象创建并返回一个iterator接口，这样就可以使用for...of...循环进行遍历，返回对应的键值对。
+
+```
+const buf = Buffer.from('buffer');
+
+// Prints:
+//   [0, 98]
+//   [1, 117]
+//   [2, 102]
+//   [3, 102]
+//   [4, 101]
+//   [5, 114]
+for (const pair of buf.entries()) {
+  console.log(pair);
+}
+```
+
+### buf.equals(otherBuffer)
+
+> 用来比较两个Buffer对象是否相等，返回值为布尔值。
+
+```
+const buf1 = Buffer.from('ABC');
+const buf2 = Buffer.from('414243', 'hex');
+const buf3 = Buffer.from('ABCD');
+
+// Prints: true
+console.log(buf1.equals(buf2));
+
+// Prints: false
+console.log(buf1.equals(buf3));
+```
+
+### buf.fill(value[, offset[, end]][, encoding])
+
+> 以指定的内容填充Buffer对象。如果传入参数不是一个字符串或者整数，那么会强制转换为32位无符号整型Uint32。如果填充的数据是个多字节的，那么只会取出第一个字节进行填充。
+
+* value: 要填充的内容。
+* offset: 可以指定起始填充位置。
+* end: 指定结束填充位置。
+* encoding: 指定填充字符的编码，默认为utf8。
+
+```
+const b = Buffer.allocUnsafe(50).fill('h');
+
+// Prints: hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+console.log(b.toString());
+
+// Prints: <Buffer c8 a2 c8>
+console.log(Buffer.allocUnsafe(3).fill('\u0222'));
+```
+
+### buf.indexOf(value[, byteOffset][, encoding])
+
+> 用来查找指定value的起始位置，如果找到了返回当前位置，如果没找到就返回-1，和字符串的indexOf行为类似。
+
+* value: 可以接收 字符串、Buffer对象、整数类型。
+* byteOffset: 指定查找的起始位置，默认0。
+* encoding: 如果参数是字符串，可以指定其编码类型，默认utf8。
+
+```
+const buf = Buffer.from('this is a buffer');
+
+// Prints: 0
+console.log(buf.indexOf('this'));
+
+// Prints: 2
+console.log(buf.indexOf('is'));
+
+// Prints: 8
+console.log(buf.indexOf(Buffer.from('a buffer')));
+
+// Prints: 8
+// (97 is the decimal ASCII value for 'a')
+console.log(buf.indexOf(97));
+
+// Prints: -1
+console.log(buf.indexOf(Buffer.from('a buffer example')));
+
+// Prints: 8
+console.log(buf.indexOf(Buffer.from('a buffer example').slice(0, 8)));
+
+
+const utf16Buffer = Buffer.from('\u039a\u0391\u03a3\u03a3\u0395', 'ucs2');
+
+// Prints: 4
+console.log(utf16Buffer.indexOf('\u03a3', 0, 'ucs2'));
+
+// Prints: 6
+console.log(utf16Buffer.indexOf('\u03a3', -4, 'ucs2'));
+```
+
+### buf.lastIndexOf(value[, byteOffset][, encoding])
+
+> 从后向前查找指定的数据内容，可字符串的lastIndexOf特性一样。
+
+* value: 可以接收 字符串、Buffer对象、整数类型。
+* byteOffset: 指定查找的起始位置，默认buf.length - 1。
+* encoding: 如果参数是字符串，可以指定其编码类型，默认utf8。
+
+```
+const buf = Buffer.from('this buffer is a buffer');
+
+// Prints: 0
+console.log(buf.lastIndexOf('this'));
+
+// Prints: 17
+console.log(buf.lastIndexOf('buffer'));
+
+// Prints: 17
+console.log(buf.lastIndexOf(Buffer.from('buffer')));
+
+// Prints: 15
+// (97 is the decimal ASCII value for 'a')
+console.log(buf.lastIndexOf(97));
+
+// Prints: -1
+console.log(buf.lastIndexOf(Buffer.from('yolo')));
+
+// Prints: 5
+console.log(buf.lastIndexOf('buffer', 5));
+
+// Prints: -1
+console.log(buf.lastIndexOf('buffer', 4));
+
+
+const utf16Buffer = Buffer.from('\u039a\u0391\u03a3\u03a3\u0395', 'ucs2');
+
+// Prints: 6
+console.log(utf16Buffer.lastIndexOf('\u03a3', undefined, 'ucs2'));
+
+// Prints: 4
+console.log(utf16Buffer.lastIndexOf('\u03a3', -5, 'ucs2'));
+```
+
+### buf.includes(value[, byteOffset][, encoding])
+
+> 与indexOf功能类似，用来查找指定数据，返回布尔值。
+
+* value: 可以接收 字符串、Buffer对象、整数类型。
+* byteOffset: 指定查找的起始位置，默认0。
+* encoding: 如果参数是字符串，可以指定其编码类型，默认utf8。
+
+```
+const buf = Buffer.from('this is a buffer');
+
+// Prints: true
+console.log(buf.includes('this'));
+
+// Prints: true
+console.log(buf.includes('is'));
+
+// Prints: true
+console.log(buf.includes(Buffer.from('a buffer')));
+
+// Prints: true
+// (97 is the decimal ASCII value for 'a')
+console.log(buf.includes(97));
+
+// Prints: false
+console.log(buf.includes(Buffer.from('a buffer example')));
+
+// Prints: true
+console.log(buf.includes(Buffer.from('a buffer example').slice(0, 8)));
+
+// Prints: false
+console.log(buf.includes('this', 4));
+```
+
+### buf.keys()
+
+> 创建并返回 Buffer 对象的 iterator 的 key。
+
+```
+const buf = Buffer.from('buffer');
+
+// Prints:
+//   0
+//   1
+//   2
+//   3
+//   4
+//   5
+for (const key of buf.keys()) {
+  console.log(key);
+}
+```
+
+### buf.values()
+
+> 创建并返回 Buffer 对象的 iterator 的 value。
+
+```
+const buf = Buffer.from('buffer');
+
+// Prints:
+//   98
+//   117
+//   102
+//   102
+//   101
+//   114
+for (const value of buf.values()) {
+  console.log(value);
+}
+
+// Prints:
+//   98
+//   117
+//   102
+//   102
+//   101
+//   114
+for (const value of buf) {
+  console.log(value);
+}
+```
+
+### buf.toJSON()
+
+> 将Buffer转为JSON对象并返回，也可以隐式的使用JSON.stringify来代替此方法。
+
+```
+const buf = Buffer.from([0x1, 0x2, 0x3, 0x4, 0x5]);
+const json = JSON.stringify(buf);
+
+// Prints: {"type":"Buffer","data":[1,2,3,4,5]}
+console.log(json);
+// Prints: { type: 'Buffer', data: [ 98, 117, 102, 102, 101, 114 ] }
+console.log(buf.toJSON());
+
+const copy = JSON.parse(json, (key, value) => {
+  return value && value.type === 'Buffer'
+    ? Buffer.from(value.data)
+    : value;
+});
+
+// Prints: <Buffer 01 02 03 04 05>
+console.log(copy);
+```
+
+源码：
+
+```
+Buffer.prototype.toJSON = function() {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this, 0)
+  };
+};
+```
+
+### buf.write(string[, offset[, length]][, encoding])
+
+> 在指定的位置以指定的编码将字符串写入Buffer对象，如果写入的字符串的字节数大于Buffer对象的大小，那么就会被截取。另外如果指定的字符编码不支持是无法写入的。
+
+* string: 字符串类型的参数。
+* offset: 指定写入的起始位置，默认是0。
+* length: 要写入到Buffer对象的长度，默认是buf.length -- length。
+* encoding: 指定字符的编码格式，默认utf8。
+
+```
+const buf = Buffer.allocUnsafe(256);
+
+const len = buf.write('\u00bd + \u00bc = \u00be', 0);
+
+// Prints: 12 bytes: ½ + ¼ = ¾
+console.log(`${len} bytes: ${buf.toString('utf8', 0, len)}`);
+```
+
+---
+
+> 还有一些不常用的API，请自行参阅英文文档。
+https://nodejs.org/dist/latest-v7.x/docs/api/buffer.html
 
 
 
